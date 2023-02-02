@@ -1,16 +1,11 @@
 [package]
-name = "rest-api"
+name = "crud-rs"
 version = "0.1.0"
 authors = ["TmLev <sololev27@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-diesel = "1.4.7"
-
-[dependencies.rocket]
-version = "0.5.0-rc.1"
-features = ["json"]
-
-[dependencies.rocket_sync_db_pools]
-version = "0.1.0-rc.1"
-features = ["diesel_postgres_pool"]
+diesel = { version = "2.0.3", features = ["postgres", "r2d2"] }
+diesel_migrations = "2.0.0"
+rocket = { git = "https://github.com/SergioBenitez/Rocket.git", branch = "master", features = ["tls", "json"] }
+rocket_sync_db_pools = { git = "https://github.com/SergioBenitez/Rocket.git", branch = "master", features = ["diesel_postgres_pool"] }

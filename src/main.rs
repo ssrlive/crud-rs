@@ -1,21 +1,15 @@
+use crud_rs::{models::Artist, schema::artists, ApiError, DbConn};
+use diesel::prelude::*;
 use rocket::{
     response::status::{Created, NoContent, NotFound},
     serde::json::Json,
-};
-
-use diesel::prelude::*;
-
-use rest_api::{
-    models::{Artist, NewArtist, UpdatedArtist},
-    schema::artists,
-    ApiError, PgConnection,
 };
 
 #[rocket::launch]
 fn rocket() -> _ {
     rocket::build()
         // State
-        .attach(PgConnection::fairing())
+        .attach(DbConn::fairing())
         // Routes
         .mount(
             "/artists",
@@ -24,7 +18,7 @@ fn rocket() -> _ {
 }
 
 #[rocket::get("/")]
-async fn list(connection: PgConnection) -> Json<Vec<Artist>> {
+async fn list(connection: DbConn) -> Json<Vec<Artist>> {
     connection
         .run(|c| artists::table.load(c))
         .await
@@ -33,10 +27,7 @@ async fn list(connection: PgConnection) -> Json<Vec<Artist>> {
 }
 
 #[rocket::get("/<id>")]
-async fn retrieve(
-    connection: PgConnection,
-    id: i32,
-) -> Result<Json<Artist>, NotFound<Json<ApiError>>> {
+async fn retrieve(connection: DbConn, id: i32) -> Result<Json<Artist>, NotFound<Json<ApiError>>> {
     connection
         .run(move |c| artists::table.filter(artists::id.eq(id)).first(c))
         .await
@@ -50,13 +41,24 @@ async fn retrieve(
 
 #[rocket::post("/", data = "<artist>")]
 async fn create(
-    connection: PgConnection,
-    artist: Json<NewArtist>,
+    connection: DbConn,
+    artist: Json<Artist>,
 ) -> Result<Created<Json<Artist>>, Json<ApiError>> {
+    #[derive(Insertable)]
+    #[diesel(table_name = artists)]
+    pub struct NewArtist {
+        pub name: String,
+        pub description: String,
+    }
+
     connection
         .run(move |c| {
+            let artist = NewArtist {
+                name: artist.name.clone(),
+                description: artist.description.clone(),
+            };
             diesel::insert_into(artists::table)
-                .values(&artist.into_inner())
+                .values(&artist)
                 .get_result(c)
         })
         .await
@@ -70,14 +72,16 @@ async fn create(
 
 #[rocket::patch("/<id>", data = "<artist>")]
 async fn update(
-    connection: PgConnection,
+    connection: DbConn,
     id: i32,
-    artist: Json<UpdatedArtist>,
+    artist: Json<Artist>,
 ) -> Result<Json<Artist>, NotFound<Json<ApiError>>> {
     connection
         .run(move |c| {
+            let mut artist = artist.into_inner();
+            artist.id = id;
             diesel::update(artists::table.find(id))
-                .set(&artist.into_inner())
+                .set(&artist)
                 .get_result(c)
         })
         .await
@@ -90,7 +94,7 @@ async fn update(
 }
 
 #[rocket::delete("/<id>")]
-async fn destroy(connection: PgConnection, id: i32) -> Result<NoContent, NotFound<Json<ApiError>>> {
+async fn destroy(connection: DbConn, id: i32) -> Result<NoContent, NotFound<Json<ApiError>>> {
     connection
         .run(move |c| {
             let affected = diesel::delete(artists::table.filter(artists::id.eq(id)))
